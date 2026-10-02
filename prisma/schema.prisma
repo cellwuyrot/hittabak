@@ -126,6 +126,7 @@ model Order {
   phone        String      @default("")
   address      String      @default("")
   comment      String      @default("")
+  adminNote    String      @default("")
   trackNumber  String      @default("")
   trackUrl     String      @default("")
   promoCode    String      @default("")

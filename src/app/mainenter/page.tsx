@@ -79,6 +79,7 @@ interface Order {
   phone: string;
   address: string;
   comment: string;
+  adminNote: string;
   createdAt: string;
   user: { email: string; name: string };
   items: OrderItem[];
@@ -137,14 +138,36 @@ interface SiteSettings {
 
 interface MsgItem { id: string; senderId: string; senderRole: string; text: string; createdAt: string; }
 
-function OrdersPanel({ orders, statusLabels, updateOrderStatus, deleteOrder, token }: {
+function OrdersPanel({ orders, statusLabels, updateOrderStatus, updateOrderNote, deleteOrder, token }: {
   orders: Order[]; statusLabels: Record<string, string>;
-  updateOrderStatus: (id: string, status: string) => void; deleteOrder: (id: string) => void; token: string;
+  updateOrderStatus: (id: string, status: string) => void;
+  updateOrderNote: (id: string, adminNote: string) => Promise<boolean>;
+  deleteOrder: (id: string) => void; token: string;
 }) {
   const [openChat, setOpenChat] = useState<string | null>(null);
   const [messages, setMessages] = useState<MsgItem[]>([]);
   const [msgText, setMsgText] = useState("");
   const [sending, setSending] = useState(false);
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [savingNote, setSavingNote] = useState<string | null>(null);
+  const [noteMessage, setNoteMessage] = useState<Record<string, string>>({});
+
+  const saveNote = async (order: Order) => {
+    const value = noteDrafts[order.id] ?? order.adminNote ?? "";
+    setSavingNote(order.id);
+    setNoteMessage((current) => ({ ...current, [order.id]: "" }));
+    const saved = await updateOrderNote(order.id, value);
+    setSavingNote(null);
+    setNoteMessage((current) => ({
+      ...current,
+      [order.id]: saved ? "Сохранено" : "Не удалось сохранить",
+    }));
+    if (saved) setNoteDrafts((current) => {
+      const next = { ...current };
+      delete next[order.id];
+      return next;
+    });
+  };
 
   const loadMessages = async (orderId: string) => {
     const res = await fetch(`/api/admin/messages?orderId=${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -212,6 +235,41 @@ function OrdersPanel({ orders, statusLabels, updateOrderStatus, deleteOrder, tok
                 <span className="font-bold text-primary">{order.total.toLocaleString("ru-RU")} ₽</span>
               </div>
               {order.comment && <p className="text-xs text-text-gray mt-1">Комментарий: {order.comment}</p>}
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <label htmlFor={`admin-note-${order.id}`} className="text-xs font-semibold text-amber-900">
+                    📝 Заметка администратора
+                  </label>
+                  <span className="text-xs text-amber-700">
+                    {noteMessage[order.id] || "Покупателю не видна"}
+                  </span>
+                </div>
+                <div className="flex items-end gap-2">
+                  <textarea
+                    id={`admin-note-${order.id}`}
+                    value={noteDrafts[order.id] ?? order.adminNote ?? ""}
+                    onChange={(event) => {
+                      setNoteDrafts((current) => ({ ...current, [order.id]: event.target.value }));
+                      setNoteMessage((current) => ({ ...current, [order.id]: "" }));
+                    }}
+                    onKeyDown={(event) => {
+                      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") saveNote(order);
+                    }}
+                    maxLength={5000}
+                    rows={2}
+                    placeholder="Например: клиент просил позвонить после 18:00"
+                    className="min-h-16 flex-1 resize-y rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-text-dark focus:border-amber-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => saveNote(order)}
+                    disabled={savingNote === order.id || (noteDrafts[order.id] ?? order.adminNote ?? "") === (order.adminNote ?? "")}
+                    className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingNote === order.id ? "..." : "Сохранить"}
+                  </button>
+                </div>
+              </div>
 
               {openChat === order.id && (
                 <div className="mt-3 pt-3 border-t border-border">
@@ -837,6 +895,20 @@ export default function AdminPage() {
   const updateOrderStatus = async (id: string, status: string) => {
     await fetch("/api/admin/orders", { method: "PUT", headers: hdrs(), body: JSON.stringify({ id, status }) });
     fetchData();
+  };
+
+  const updateOrderNote = async (id: string, adminNote: string) => {
+    const res = await fetch("/api/admin/orders", {
+      method: "PUT",
+      headers: hdrs(),
+      body: JSON.stringify({ id, adminNote }),
+    });
+    if (!res.ok) return false;
+    const updated = await res.json();
+    setOrders((current) => current.map((order) => (
+      order.id === id ? { ...order, adminNote: updated.adminNote || "" } : order
+    )));
+    return true;
   };
 
   const deleteOrder = async (id: string) => {
@@ -1550,7 +1622,7 @@ export default function AdminPage() {
 
         {/* Orders */}
         {activeTab === "orders" && (
-          <OrdersPanel orders={orders} statusLabels={statusLabels} updateOrderStatus={updateOrderStatus} deleteOrder={deleteOrder} token={token} />
+          <OrdersPanel orders={orders} statusLabels={statusLabels} updateOrderStatus={updateOrderStatus} updateOrderNote={updateOrderNote} deleteOrder={deleteOrder} token={token} />
         )}
         {/* Inquiries */}
         {activeTab === "reviews" && <ReviewsPanel token={token} />}
