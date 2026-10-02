@@ -1883,6 +1883,7 @@ interface InquiryItem {
   phone: string;
   items: string;
   comment: string;
+  adminNote: string;
   address: string;
   total: number;
   status: string;
@@ -1893,6 +1894,9 @@ function InquiriesPanel({ token }: { token: string }) {
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [savingNote, setSavingNote] = useState<string | null>(null);
+  const [noteMessage, setNoteMessage] = useState<Record<string, string>>({});
 
   const loadInquiries = async () => {
     const res = await fetch("/api/admin/inquiries", { headers: { Authorization: `Bearer ${token}` } });
@@ -1909,6 +1913,32 @@ function InquiriesPanel({ token }: { token: string }) {
       body: JSON.stringify({ id, status }),
     });
     loadInquiries();
+  };
+
+  const saveAdminNote = async (inquiry: InquiryItem) => {
+    const adminNote = noteDrafts[inquiry.id] ?? inquiry.adminNote ?? "";
+    setSavingNote(inquiry.id);
+    setNoteMessage((current) => ({ ...current, [inquiry.id]: "" }));
+    const res = await fetch("/api/admin/inquiries", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: inquiry.id, adminNote }),
+    });
+    setSavingNote(null);
+    if (!res.ok) {
+      setNoteMessage((current) => ({ ...current, [inquiry.id]: "Не удалось сохранить" }));
+      return;
+    }
+    const updated = await res.json();
+    setInquiries((current) => current.map((item) => (
+      item.id === inquiry.id ? { ...item, adminNote: updated.adminNote || "" } : item
+    )));
+    setNoteDrafts((current) => {
+      const next = { ...current };
+      delete next[inquiry.id];
+      return next;
+    });
+    setNoteMessage((current) => ({ ...current, [inquiry.id]: "Сохранено" }));
   };
 
   const deleteInquiry = async (id: string) => {
@@ -1982,6 +2012,41 @@ function InquiriesPanel({ token }: { token: string }) {
                     {inq.comment && <p className="text-sm text-text-gray mt-2 italic">Комментарий: {inq.comment}</p>}
                   </div>
                 )}
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <label htmlFor={`inquiry-admin-note-${inq.id}`} className="text-xs font-semibold text-amber-900">
+                      📝 Заметка администратора
+                    </label>
+                    <span className="text-xs text-amber-700">
+                      {noteMessage[inq.id] || "Клиенту не видна"}
+                    </span>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <textarea
+                      id={`inquiry-admin-note-${inq.id}`}
+                      value={noteDrafts[inq.id] ?? inq.adminNote ?? ""}
+                      onChange={(event) => {
+                        setNoteDrafts((current) => ({ ...current, [inq.id]: event.target.value }));
+                        setNoteMessage((current) => ({ ...current, [inq.id]: "" }));
+                      }}
+                      onKeyDown={(event) => {
+                        if ((event.ctrlKey || event.metaKey) && event.key === "Enter") saveAdminNote(inq);
+                      }}
+                      maxLength={5000}
+                      rows={2}
+                      placeholder="Например: уточнить адрес или согласовать время доставки"
+                      className="min-h-16 flex-1 resize-y rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-text-dark focus:border-amber-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => saveAdminNote(inq)}
+                      disabled={savingNote === inq.id || (noteDrafts[inq.id] ?? inq.adminNote ?? "") === (inq.adminNote ?? "")}
+                      className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingNote === inq.id ? "..." : "Сохранить"}
+                    </button>
+                  </div>
+                </div>
               </div>
             );
           })}
