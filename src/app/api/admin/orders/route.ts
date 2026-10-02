@@ -19,9 +19,27 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
-  const { id, status } = await request.json();
-  if (!id || !status) return Response.json({ error: "Укажите id и статус" }, { status: 400 });
-  const order = await prisma.order.update({ where: { id }, data: { status } });
+  const { id, status, adminNote } = await request.json();
+  if (!id) return Response.json({ error: "Укажите id" }, { status: 400 });
+  if (status === undefined && adminNote === undefined) {
+    return Response.json({ error: "Нет данных для обновления" }, { status: 400 });
+  }
+  if (status !== undefined && (typeof status !== "string" || !status.trim())) {
+    return Response.json({ error: "Некорректный статус" }, { status: 400 });
+  }
+  if (adminNote !== undefined && typeof adminNote !== "string") {
+    return Response.json({ error: "Некорректная заметка" }, { status: 400 });
+  }
+  if (typeof adminNote === "string" && adminNote.length > 5000) {
+    return Response.json({ error: "Заметка не должна превышать 5000 символов" }, { status: 400 });
+  }
+  const order = await prisma.order.update({
+    where: { id },
+    data: {
+      ...(status !== undefined ? { status: status.trim() } : {}),
+      ...(adminNote !== undefined ? { adminNote: adminNote.trim() } : {}),
+    },
+  });
   return Response.json(order);
 }
 

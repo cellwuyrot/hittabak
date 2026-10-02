@@ -15,7 +15,12 @@ export async function GET(request: Request) {
 
   const orders = await prisma.order.findMany({
     where: { userId },
-    include: { items: { include: { product: true } } },
+    select: {
+      id: true, status: true, total: true, name: true, phone: true, address: true,
+      comment: true, trackNumber: true, trackUrl: true, promoCode: true, discount: true,
+      createdAt: true, updatedAt: true,
+      items: { include: { product: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
   return Response.json(orders);
@@ -57,7 +62,12 @@ export async function POST(request: Request) {
         })),
       },
     },
-    include: { items: { include: { product: true } } },
+    select: {
+      id: true, status: true, total: true, name: true, phone: true, address: true,
+      comment: true, trackNumber: true, trackUrl: true, promoCode: true, discount: true,
+      createdAt: true, updatedAt: true,
+      items: { include: { product: true } },
+    },
   });
 
   await prisma.cartItem.deleteMany({ where: { userId } });
