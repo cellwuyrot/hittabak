@@ -10,8 +10,8 @@ function checkAdmin(req: NextRequest) {
   const auth = req.headers.get("authorization");
   if (!auth) return false;
   try {
-    jwt.verify(auth.replace("Bearer ", ""), SECRET);
-    return true;
+    const payload = jwt.verify(auth.replace("Bearer ", ""), SECRET) as { role?: string };
+    return payload.role === "admin";
   } catch {
     return false;
   }
@@ -29,7 +29,20 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   if (!checkAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, status } = await req.json();
+  const { id, status, adminNote } = await req.json();
+  if (!id) return Response.json({ error: "Укажите id" }, { status: 400 });
+  if (status === undefined && adminNote === undefined) {
+    return Response.json({ error: "Нет данных для обновления" }, { status: 400 });
+  }
+  if (status !== undefined && (typeof status !== "string" || !status.trim())) {
+    return Response.json({ error: "Некорректный статус" }, { status: 400 });
+  }
+  if (adminNote !== undefined && typeof adminNote !== "string") {
+    return Response.json({ error: "Некорректная заметка" }, { status: 400 });
+  }
+  if (typeof adminNote === "string" && adminNote.length > 5000) {
+    return Response.json({ error: "Заметка не должна превышать 5000 символов" }, { status: 400 });
+  }
   const settings = await getSiteSettings();
 
   const existing = await prisma.inquiry.findUnique({ where: { id } });
@@ -37,12 +50,16 @@ export async function PATCH(req: NextRequest) {
 
   const updated = await prisma.inquiry.update({
     where: { id },
-    data: { status },
+    data: {
+      ...(status !== undefined ? { status: status.trim() } : {}),
+      ...(adminNote !== undefined ? { adminNote: adminNote.trim() } : {}),
+    },
   });
 
+  const nextStatus = status === undefined ? existing.status : status.trim();
   const canSendStatusEmail = existing.email && (existing.emailVerified || settings.disableCheckoutEmailVerification);
-  if (existing.status !== status && canSendStatusEmail) {
-    sendStatusUpdateNotification(existing.email, existing.name, status, id)
+  if (status !== undefined && existing.status !== nextStatus && canSendStatusEmail) {
+    sendStatusUpdateNotification(existing.email, existing.name, nextStatus, id)
       .catch((err) => console.error("Failed to send status notification:", err));
   }
 

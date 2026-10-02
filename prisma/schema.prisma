@@ -263,6 +263,7 @@ model Inquiry {
   phone         String
   items         String   @default("[]")
   comment       String   @default("")
+  adminNote     String   @default("")
   address       String   @default("")
   total         Int      @default(0)
   status        String   @default("new")
