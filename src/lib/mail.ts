@@ -69,11 +69,19 @@ export async function sendNewInquiryNotification(inquiry: {
   total: number;
   address: string;
   comment: string;
+  preferredContact: string;
+  deliveryMethod: string;
 }) {
+  const contactLabels: Record<string, string> = {
+    phone: "Телефон", telegram: "Telegram", whatsapp: "WhatsApp", email: "Email",
+  };
+  const deliveryLabels: Record<string, string> = {
+    cdek: "СДЭК", russian_post: "Почта России", pickup: "Самовывоз",
+  };
   const itemsList = JSON.parse(inquiry.items || "[]");
   const itemsHtml = itemsList
-    .map((item: { name?: string; quantity?: number; price?: number }) =>
-      `<li>${item.name || "Товар"} × ${item.quantity || 1}${item.price ? ` — ${item.price} ₽` : ""}</li>`
+    .map((item: { name?: string; productName?: string; quantity?: number; price?: number }) =>
+      `<li>${item.productName || item.name || "Товар"} × ${item.quantity || 1}${item.price ? ` — ${item.price} ₽` : ""}</li>`
     )
     .join("");
 
@@ -84,6 +92,8 @@ export async function sendNewInquiryNotification(inquiry: {
         <tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b;">Имя:</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-weight: bold;">${inquiry.name}</td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b;">Email:</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;"><a href="mailto:${inquiry.email}">${inquiry.email}</a></td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b;">Телефон:</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;"><a href="tel:${inquiry.phone}">${inquiry.phone}</a></td></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b;">Предпочитаемая связь:</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${contactLabels[inquiry.preferredContact] || inquiry.preferredContact}</td></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b;">Доставка:</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${deliveryLabels[inquiry.deliveryMethod] || inquiry.deliveryMethod}</td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b;">Адрес:</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${inquiry.address || "—"}</td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b;">Комментарий:</td><td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${inquiry.comment || "—"}</td></tr>
         <tr><td style="padding: 8px; color: #64748b;">Сумма:</td><td style="padding: 8px; font-weight: bold; font-size: 18px; color: #E8403A;">${inquiry.total.toLocaleString("ru-RU")} ₽</td></tr>

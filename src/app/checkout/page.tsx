@@ -12,8 +12,10 @@ interface PublicSettings { disableCheckoutEmailVerification: boolean; }
 
 export default function CheckoutPage() {
   const [items, setItems] = useState<CartItemDisplay[]>([]);
-  const [form, setForm] = useState({ name: "", email: "", phone: "+7", address: "", comment: "" });
-  const [isPickup, setIsPickup] = useState(false);
+  const [form, setForm] = useState({
+    name: "", email: "", phone: "+7", address: "", comment: "",
+    preferredContact: "phone", deliveryMethod: "cdek",
+  });
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [inquiryId, setInquiryId] = useState("");
@@ -90,8 +92,20 @@ export default function CheckoutPage() {
       errors.phone = "Телефон должен содержать 11 цифр";
     }
 
-    if (!isPickup && form.address.trim().length > 0 && form.address.trim().length < 10) {
-      errors.address = "Укажите полный адрес";
+    if (form.deliveryMethod !== "pickup" && form.address.trim().length < 10) {
+      errors.address = "Укажите полный адрес доставки";
+    }
+
+    if (!["phone", "telegram", "whatsapp", "email"].includes(form.preferredContact)) {
+      errors.preferredContact = "Выберите способ связи";
+    }
+
+    if (!["cdek", "russian_post", "pickup"].includes(form.deliveryMethod)) {
+      errors.deliveryMethod = "Выберите способ доставки";
+    }
+
+    if (form.comment.length > 2000) {
+      errors.comment = "Комментарий не должен превышать 2000 символов";
     }
 
     setFieldErrors(errors);
@@ -161,7 +175,11 @@ export default function CheckoutPage() {
             isPack: i.isPack,
           })),
           comment: form.comment.trim(),
-          address: isPickup ? "Самовывоз" : form.address.trim(),
+          preferredContact: form.preferredContact,
+          deliveryMethod: form.deliveryMethod,
+          address: form.deliveryMethod === "pickup"
+            ? "Москва, ул. Складочная, 1, стр. 18"
+            : form.address.trim(),
           total,
           emailVerified: settings.disableCheckoutEmailVerification ? false : emailVerified,
         }),
@@ -337,30 +355,84 @@ export default function CheckoutPage() {
                       {fieldErrors.phone && <p className="text-danger text-xs mt-1">{fieldErrors.phone}</p>}
                     </div>
 
+                    <fieldset>
+                      <legend className="text-sm text-text-gray mb-2">Предпочитаемый способ связи *</legend>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          { value: "phone", label: "Телефон" },
+                          { value: "telegram", label: "Telegram" },
+                          { value: "whatsapp", label: "WhatsApp" },
+                          { value: "email", label: "Почта" },
+                        ].map((option) => (
+                          <label key={option.value} className={`cursor-pointer rounded-lg border px-3 py-2.5 text-center text-sm transition-colors ${
+                            form.preferredContact === option.value ? "border-primary bg-primary text-white" : "border-border bg-bg-light text-text-gray"
+                          }`}>
+                            <input
+                              type="radio"
+                              name="preferredContact"
+                              value={option.value}
+                              checked={form.preferredContact === option.value}
+                              onChange={(event) => {
+                                setForm({ ...form, preferredContact: event.target.value });
+                                setFieldErrors((current) => ({ ...current, preferredContact: "" }));
+                              }}
+                              className="sr-only"
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                      {fieldErrors.preferredContact && <p className="text-danger text-xs mt-1">{fieldErrors.preferredContact}</p>}
+                    </fieldset>
+
                     {/* Delivery */}
-                    <div className="flex gap-2 pt-2">
-                      <button onClick={() => { setIsPickup(false); setForm({ ...form, address: "" }); }}
-                        className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${!isPickup ? "bg-primary text-white" : "bg-bg-light text-text-gray border border-border"}`}>
-                        Доставка
-                      </button>
-                      <button onClick={() => { setIsPickup(true); setForm({ ...form, address: "Самовывоз" }); }}
-                        className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${isPickup ? "bg-green-600 text-white" : "bg-bg-light text-text-gray border border-border"}`}>
-                        Самовывоз
-                      </button>
-                    </div>
-                    {isPickup && (
+                    <fieldset className="pt-2">
+                      <legend className="text-sm text-text-gray mb-2">Способ доставки *</legend>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {[
+                          { value: "cdek", label: "СДЭК" },
+                          { value: "russian_post", label: "Почта России" },
+                          { value: "pickup", label: "Самовывоз" },
+                        ].map((option) => (
+                          <label key={option.value} className={`cursor-pointer rounded-lg border px-3 py-2.5 text-center text-sm font-medium transition-colors ${
+                            form.deliveryMethod === option.value
+                              ? option.value === "pickup" ? "border-green-600 bg-green-600 text-white" : "border-primary bg-primary text-white"
+                              : "border-border bg-bg-light text-text-gray"
+                          }`}>
+                            <input
+                              type="radio"
+                              name="deliveryMethod"
+                              value={option.value}
+                              checked={form.deliveryMethod === option.value}
+                              onChange={(event) => {
+                                setForm({ ...form, deliveryMethod: event.target.value, address: "" });
+                                setFieldErrors((current) => ({ ...current, deliveryMethod: "", address: "" }));
+                              }}
+                              className="sr-only"
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                      {fieldErrors.deliveryMethod && <p className="text-danger text-xs mt-1">{fieldErrors.deliveryMethod}</p>}
+                    </fieldset>
+                    {form.deliveryMethod === "pickup" && (
                       <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700">
                         <p className="font-medium">Москва, ул. Складочная, 1, стр. 18</p>
                         <p>Пн–Пт с 11:00 до 16:00, выходной — Сб и Вск</p>
                       </div>
                     )}
-                    {!isPickup && (
+                    {form.deliveryMethod !== "pickup" && (
                       <div>
-                        <label className="text-sm text-text-gray mb-1 block">Адрес доставки</label>
+                        <label className="text-sm text-text-gray mb-1 block">
+                          {form.deliveryMethod === "cdek" ? "Адрес или пункт выдачи СДЭК *" : "Почтовый адрес и индекс *"}
+                        </label>
                         <textarea
                           value={form.address}
                           onChange={(e) => { setForm({ ...form, address: e.target.value }); setFieldErrors((p) => ({ ...p, address: "" })); }}
-                          placeholder="Город, улица, дом, квартира"
+                          placeholder={form.deliveryMethod === "cdek"
+                            ? "Город, адрес пункта СДЭК или адрес доставки"
+                            : "Индекс, город, улица, дом, квартира"}
                           className={`w-full border rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary ${fieldErrors.address ? "border-danger" : "border-border"}`}
                           rows={2}
                         />
@@ -371,11 +443,19 @@ export default function CheckoutPage() {
                       <label className="text-sm text-text-gray mb-1 block">Комментарий</label>
                       <textarea
                         value={form.comment}
-                        onChange={(e) => setForm({ ...form, comment: e.target.value })}
-                        placeholder="Дополнительные пожелания"
-                        className="w-full border border-border rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary"
-                        rows={2}
+                        onChange={(e) => {
+                          setForm({ ...form, comment: e.target.value });
+                          setFieldErrors((current) => ({ ...current, comment: "" }));
+                        }}
+                        placeholder="Дополнительные пожелания к заказу или доставке"
+                        maxLength={2000}
+                        className={`w-full border rounded-lg px-4 py-2.5 focus:outline-none focus:border-primary ${fieldErrors.comment ? "border-danger" : "border-border"}`}
+                        rows={3}
                       />
+                      <div className="flex justify-between gap-2 mt-1">
+                        {fieldErrors.comment ? <p className="text-danger text-xs">{fieldErrors.comment}</p> : <span />}
+                        <span className="text-xs text-text-light">{form.comment.length}/2000</span>
+                      </div>
                     </div>
                   </div>
 
