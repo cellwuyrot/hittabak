@@ -264,6 +264,8 @@ model Inquiry {
   items         String   @default("[]")
   comment       String   @default("")
   adminNote     String   @default("")
+  preferredContact String @default("phone")
+  deliveryMethod  String @default("cdek")
   address       String   @default("")
   total         Int      @default(0)
   status        String   @default("new")

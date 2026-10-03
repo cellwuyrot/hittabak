@@ -1884,6 +1884,8 @@ interface InquiryItem {
   items: string;
   comment: string;
   adminNote: string;
+  preferredContact: string;
+  deliveryMethod: string;
   address: string;
   total: number;
   status: string;
@@ -1953,6 +1955,8 @@ function InquiriesPanel({ token }: { token: string }) {
 
   const statusLabels: Record<string, string> = { new: "Новая", processing: "В работе", done: "Завершена", cancelled: "Отменена" };
   const statusColors: Record<string, string> = { new: "bg-accent text-white", processing: "bg-primary text-white", done: "bg-success text-white", cancelled: "bg-gray-400 text-white" };
+  const contactLabels: Record<string, string> = { phone: "Телефон", telegram: "Telegram", whatsapp: "WhatsApp", email: "Почта" };
+  const deliveryLabels: Record<string, string> = { cdek: "СДЭК", russian_post: "Почта России", pickup: "Самовывоз" };
 
   const parseItems = (itemsStr: string): { productName: string; quantity: number; price: number; isPack: boolean }[] => {
     try { return JSON.parse(itemsStr); } catch { return []; }
@@ -1984,6 +1988,10 @@ function InquiriesPanel({ token }: { token: string }) {
                       <a href={`tel:${inq.phone}`} className="text-primary hover:underline">{inq.phone}</a>
                       <a href={`mailto:${inq.email}`} className="text-primary hover:underline">{inq.email}</a>
                     </div>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-gray">
+                      <span>Связь: <strong className="text-text-dark">{contactLabels[inq.preferredContact] || inq.preferredContact || "Телефон"}</strong></span>
+                      <span>Доставка: <strong className="text-text-dark">{deliveryLabels[inq.deliveryMethod] || inq.deliveryMethod || "СДЭК"}</strong></span>
+                    </div>
                     {inq.address && <p className="text-xs text-text-gray mt-1">{inq.address}</p>}
                   </div>
                   <div className="flex items-center gap-2">
@@ -2012,6 +2020,9 @@ function InquiriesPanel({ token }: { token: string }) {
                     {inq.comment && <p className="text-sm text-text-gray mt-2 italic">Комментарий: {inq.comment}</p>}
                   </div>
                 )}
+                {inq.comment && !isExpanded && (
+                  <p className="mt-2 text-sm italic text-text-gray">Комментарий клиента: {inq.comment}</p>
+                )}
                 <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <label htmlFor={`inquiry-admin-note-${inq.id}`} className="text-xs font-semibold text-amber-900">
@@ -2034,7 +2045,7 @@ function InquiriesPanel({ token }: { token: string }) {
                       }}
                       maxLength={5000}
                       rows={2}
-                      placeholder="Например: уточнить адрес или согласовать время доставки"
+                      placeholder="Например: связаться в Telegram после 18:00"
                       className="min-h-16 flex-1 resize-y rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-text-dark focus:border-amber-500 focus:outline-none"
                     />
                     <button
