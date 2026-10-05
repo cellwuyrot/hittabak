@@ -1,58 +1,21 @@
 import { prisma } from "@/lib/prisma";
-import { signToken, verifyToken, getTokenFromRequest } from "@/lib/auth";
+import { signToken } from "@/lib/auth";
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
+import { clientIp, takeRateLimit } from "@/lib/rateLimit";
+import { createHash } from "crypto";
 import bcrypt from "bcryptjs";
-
+const hash=(v:string)=>createHash("sha256").update(v).digest("hex");
 export async function POST(request: Request) {
-  const { username, password } = await request.json();
-
-  if (!username || !password) {
-    return Response.json({ error: "Введите логин и пароль" }, { status: 400 });
-  }
-
-  const admin = await prisma.admin.findUnique({ where: { username } });
-
-  if (!admin || !(await bcrypt.compare(password, admin.password))) {
-    return Response.json({ error: "Неверный логин или пароль" }, { status: 401 });
-  }
-
-  const token = signToken({ id: admin.id, username: admin.username, role: "admin" });
-  return Response.json({ token, username: admin.username, role: admin.role });
+  let body:Record<string,unknown>; try{body=await request.json();}catch{return Response.json({error:"Некорректный запрос"},{status:400});}
+  if(typeof body.username!=="string"||typeof body.password!=="string") return Response.json({error:"Введите логин и пароль"},{status:400});
+  const ip=clientIp(request); if(!takeRateLimit(`admin-login-ip:${ip}`,10,15*60_000)||!takeRateLimit(`admin-login-pair:${ip}:${hash(body.username)}`,5,15*60_000)) return Response.json({error:"Слишком много попыток"},{status:429});
+  const admin=await prisma.admin.findUnique({where:{username:body.username}}); if(!admin||!["admin","editor"].includes(admin.role)||!(await bcrypt.compare(body.password,admin.password))) return Response.json({error:"Неверный логин или пароль"},{status:401});
+  const role=admin.role as "admin"|"editor"; return Response.json({token:signToken({id:admin.id,username:admin.username,role}),username:admin.username,role});
 }
-
 export async function PUT(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) return Response.json({ error: "Не авторизован" }, { status: 401 });
-  const payload = verifyToken(token);
-  if (!payload || payload.role !== "admin") return Response.json({ error: "Не авторизован" }, { status: 401 });
-
-  const { currentPassword, newPassword, newUsername } = await request.json();
-
-  const admin = await prisma.admin.findUnique({ where: { id: payload.id } });
-  if (!admin) return Response.json({ error: "Админ не найден" }, { status: 404 });
-
-  if (newPassword) {
-    if (!currentPassword) return Response.json({ error: "Введите текущий пароль" }, { status: 400 });
-    if (newPassword.length < 6) return Response.json({ error: "Новый пароль должен быть минимум 6 символов" }, { status: 400 });
-    if (!(await bcrypt.compare(currentPassword, admin.password))) {
-      return Response.json({ error: "Неверный текущий пароль" }, { status: 400 });
-    }
-  }
-
-  const data: Record<string, string> = {};
-  if (newUsername && newUsername !== admin.username) {
-    const existing = await prisma.admin.findUnique({ where: { username: newUsername } });
-    if (existing) return Response.json({ error: "Этот логин уже занят" }, { status: 400 });
-    data.username = newUsername;
-  }
-  if (newPassword) {
-    data.password = await bcrypt.hash(newPassword, 10);
-  }
-
-  if (Object.keys(data).length === 0) {
-    return Response.json({ error: "Нечего обновлять" }, { status: 400 });
-  }
-
-  await prisma.admin.update({ where: { id: payload.id }, data });
-  const newToken = signToken({ id: admin.id, username: data.username || admin.username, role: "admin" });
-  return Response.json({ success: true, token: newToken, username: data.username || admin.username });
+  const auth=await authorizeAdmin(request,"settings:manage"); if(!auth.ok)return adminDenied(auth);
+  const body=await request.json(); const {currentPassword,newPassword,newUsername}=body; const admin=await prisma.admin.findUnique({where:{id:auth.admin.id}}); if(!admin)return Response.json({error:"Админ не найден"},{status:404});
+  if(newPassword&&(!currentPassword||newPassword.length<8||!(await bcrypt.compare(currentPassword,admin.password)))) return Response.json({error:"Текущий пароль неверен или новый пароль слишком короткий"},{status:400});
+  const data:Record<string,string>={}; if(newUsername&&newUsername!==admin.username)data.username=String(newUsername); if(newPassword)data.password=await bcrypt.hash(newPassword,12); if(!Object.keys(data).length)return Response.json({error:"Нечего обновлять"},{status:400});
+  await prisma.admin.update({where:{id:admin.id},data}); return Response.json({success:true,token:signToken({id:admin.id,username:data.username||admin.username,role:admin.role as "admin"|"editor"}),username:data.username||admin.username});
 }

@@ -1,11 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
+import { authenticateUser } from "@/lib/userAuthorization";
 
 export async function POST(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) return Response.json({ error: "Не авторизован" }, { status: 401 });
-  const payload = verifyToken(token);
-  if (!payload || payload.role !== "user") return Response.json({ error: "Войдите в аккаунт" }, { status: 401 });
+  const authentication = await authenticateUser(request);
+  if (!authentication) return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const payload = authentication.claims;
 
   const { productId, rating, text } = await request.json();
   if (!productId || !rating) return Response.json({ error: "Укажите товар и оценку" }, { status: 400 });

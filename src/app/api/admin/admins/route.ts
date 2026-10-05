@@ -1,23 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import bcrypt from "bcryptjs";
 
-function checkSuperAdmin(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) return null;
-  const payload = verifyToken(token);
-  if (!payload || payload.role !== "admin") return null;
-  return payload;
-}
-
 export async function GET(request: Request) {
-  const payload = checkSuperAdmin(request);
-  if (!payload) return Response.json({ error: "Не авторизован" }, { status: 401 });
-
-  const caller = await prisma.admin.findUnique({ where: { id: payload.id } });
-  if (!caller || caller.role !== "admin") {
-    return Response.json({ error: "Нет прав" }, { status: 403 });
-  }
+  const auth = await authorizeAdmin(request, "admins:manage");
+  if (!auth.ok) return adminDenied(auth);
 
   const admins = await prisma.admin.findMany({
     select: { id: true, username: true, role: true },
@@ -27,13 +14,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const payload = checkSuperAdmin(request);
-  if (!payload) return Response.json({ error: "Не авторизован" }, { status: 401 });
-
-  const caller = await prisma.admin.findUnique({ where: { id: payload.id } });
-  if (!caller || caller.role !== "admin") {
-    return Response.json({ error: "Только главный админ может создавать пользователей" }, { status: 403 });
-  }
+  const auth = await authorizeAdmin(request, "admins:manage");
+  if (!auth.ok) return adminDenied(auth);
 
   const { username, password, role } = await request.json();
   if (!username || !password) {
@@ -61,13 +43,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const payload = checkSuperAdmin(request);
-  if (!payload) return Response.json({ error: "Не авторизован" }, { status: 401 });
-
-  const caller = await prisma.admin.findUnique({ where: { id: payload.id } });
-  if (!caller || caller.role !== "admin") {
-    return Response.json({ error: "Нет прав" }, { status: 403 });
-  }
+  const auth = await authorizeAdmin(request, "admins:manage");
+  if (!auth.ok) return adminDenied(auth);
 
   const { id, role, password } = await request.json();
   if (!id) return Response.json({ error: "ID обязателен" }, { status: 400 });
@@ -89,19 +66,14 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const payload = checkSuperAdmin(request);
-  if (!payload) return Response.json({ error: "Не авторизован" }, { status: 401 });
-
-  const caller = await prisma.admin.findUnique({ where: { id: payload.id } });
-  if (!caller || caller.role !== "admin") {
-    return Response.json({ error: "Нет прав" }, { status: 403 });
-  }
+  const auth = await authorizeAdmin(request, "admins:manage");
+  if (!auth.ok) return adminDenied(auth);
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) return Response.json({ error: "ID обязателен" }, { status: 400 });
 
-  if (id === payload.id) {
+  if (id === auth.admin.id) {
     return Response.json({ error: "Нельзя удалить себя" }, { status: 400 });
   }
 

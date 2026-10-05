@@ -1,18 +1,11 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 import * as XLSX from "xlsx";
 
-function checkAdmin(request: Request): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  const payload = verifyToken(token);
-  return !!payload && payload.role === "admin";
-}
 
 export async function POST(request: Request) {
-  if (!checkAdmin(request)) {
-    return Response.json({ error: "Нет доступа" }, { status: 401 });
-  }
+  const auth = await authorizeAdmin(request, "data:export");
+  if (!auth.ok) return adminDenied(auth);
 
   const body = await request.json();
   const ids: string[] | undefined = body.ids;

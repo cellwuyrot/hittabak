@@ -1,22 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import jwt from "jsonwebtoken";
+import { authenticateUser } from "@/lib/userAuthorization";
 
-const SECRET = process.env.JWT_SECRET || "hittabak-secret-key-2025";
-
-function getUserId(req: NextRequest): string | null {
-  const auth = req.headers.get("authorization");
-  if (!auth) return null;
-  try {
-    const decoded = jwt.verify(auth.replace("Bearer ", ""), SECRET) as { userId: string };
-    return decoded.userId;
-  } catch {
-    return null;
-  }
+async function getUserId(req: NextRequest): Promise<string | null> {
+  const auth = await authenticateUser(req);
+  return auth?.user.id ?? null;
 }
 
 export async function GET(req: NextRequest) {
-  const userId = getUserId(req);
+  const userId = await getUserId(req);
   if (!userId) return NextResponse.json([], { status: 401 });
 
   const items = await prisma.wishlistItem.findMany({
@@ -39,7 +31,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = getUserId(req);
+  const userId = await getUserId(req);
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { productId } = await req.json();
@@ -59,7 +51,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const userId = getUserId(req);
+  const userId = await getUserId(req);
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { productId } = await req.json();

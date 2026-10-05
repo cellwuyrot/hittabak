@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import type { Metadata } from "next";
+import { publicBusinessConfig } from "@/lib/publicConfig";
 
 export const metadata: Metadata = {
   title: "Пользовательское соглашение — hittabak",
@@ -16,6 +17,8 @@ export const metadata: Metadata = {
 };
 
 export default function TermsPage() {
+  const { legalEntityName } = publicBusinessConfig();
+  if (!legalEntityName) return <><Header /><main className="p-8"><p>Сведения о продавце временно недоступны. Владелец сайта уведомлён о необходимости настройки.</p></main><Footer /></>;
   return (
     <>
       <Header />
@@ -27,7 +30,7 @@ export default function TermsPage() {
             <section>
               <h2 className="text-lg font-bold text-text-dark">1. Общие положения</h2>
               <p className="text-sm leading-relaxed">
-                Настоящее Пользовательское соглашение (далее — Соглашение) регулирует отношения между администрацией интернет-магазина hittabak (далее — Продавец, Сайт) и пользователями Сайта (далее — Покупатель, Пользователь). Используя Сайт, вы подтверждаете своё согласие с условиями настоящего Соглашения в полном объёме.
+                Настоящее Пользовательское соглашение (далее — Соглашение) регулирует отношения между {legalEntityName} (далее — Продавец, Сайт) и пользователями Сайта (далее — Покупатель, Пользователь). Используя Сайт, вы подтверждаете своё согласие с условиями настоящего Соглашения в полном объёме.
               </p>
               <p className="text-sm leading-relaxed mt-2">
                 Продавец оставляет за собой право в любое время изменять условия настоящего Соглашения в одностороннем порядке. Изменения вступают в силу с момента публикации на Сайте.

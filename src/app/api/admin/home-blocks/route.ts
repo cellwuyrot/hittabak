@@ -1,25 +1,18 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 
-function checkAdmin(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) return null;
-  const payload = verifyToken(token);
-  if (!payload || payload.role !== "admin") return null;
-  return payload;
-}
 
 export async function GET(request: Request) {
-  const payload = checkAdmin(request);
-  if (!payload) return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:read");
+  if (!auth.ok) return adminDenied(auth);
 
   const blocks = await prisma.homeBlock.findMany({ orderBy: { order: "asc" } });
   return Response.json(blocks);
 }
 
 export async function POST(request: Request) {
-  const payload = checkAdmin(request);
-  if (!payload) return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:write");
+  if (!auth.ok) return adminDenied(auth);
 
   const data = await request.json();
   const block = await prisma.homeBlock.create({
@@ -40,8 +33,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const payload = checkAdmin(request);
-  if (!payload) return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:write");
+  if (!auth.ok) return adminDenied(auth);
 
   const data = await request.json();
   if (!data.id) return Response.json({ error: "ID обязателен" }, { status: 400 });
@@ -65,8 +58,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const payload = checkAdmin(request);
-  if (!payload) return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:delete");
+  if (!auth.ok) return adminDenied(auth);
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");

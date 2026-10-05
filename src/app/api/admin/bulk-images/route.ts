@@ -1,14 +1,10 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
+import { detectFile } from "@/lib/safeFilePath";
 
-function checkAdmin(request: Request): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  const payload = verifyToken(token);
-  return !!payload && payload.role === "admin";
-}
 
 /** Normalize: NFC, lowercase, ё→е, separators→space, collapse, trim */
 function normalize(s: string): string {
@@ -32,9 +28,8 @@ function wordSet(s: string): Set<string> {
   return new Set(s.split(" ").filter((w) => w.length > 0));
 }
 
-const ALLOWED_EXT = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
-const MAX_TOTAL_SIZE = 600 * 1024 * 1024;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_TOTAL_SIZE = 50 * 1024 * 1024;
 
 export const maxDuration = 300;
 
@@ -42,8 +37,11 @@ type Ref = { id: string; name: string };
 type IndexedProduct = Ref & { norm: string; words: Set<string> };
 
 export async function POST(request: Request) {
-  if (!checkAdmin(request)) {
-    return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "files:upload");
+  if (!auth.ok) return adminDenied(auth);
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > MAX_TOTAL_SIZE) {
+    return Response.json({ error: "Общий размер файлов превышает 50 МБ" }, { status: 413 });
   }
 
   let formData;
@@ -63,23 +61,16 @@ export async function POST(request: Request) {
 
   let totalSize = 0;
   for (const file of files) {
-    const ext = path.extname(file.name).toLowerCase();
-    if (!ALLOWED_EXT.includes(ext)) {
-      return Response.json(
-        { error: `Неподдерживаемый формат: ${file.name}` },
-        { status: 400 },
-      );
-    }
     if (file.size > MAX_FILE_SIZE) {
       return Response.json(
-        { error: `Файл слишком большой: ${file.name} (макс 20 МБ)` },
-        { status: 400 },
+        { error: `Файл слишком большой: ${file.name} (макс 10 МБ)` },
+        { status: 413 },
       );
     }
     totalSize += file.size;
     if (totalSize > MAX_TOTAL_SIZE) {
       return Response.json(
-        { error: "Общий размер файлов превышает 600 МБ" },
+        { error: "Общий размер файлов превышает 50 МБ" },
         { status: 413 },
       );
     }
@@ -153,7 +144,13 @@ export async function POST(request: Request) {
 
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
-      const safeFileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+      const detected = detectFile(buffer);
+      if (!detected || detected.active || ![".jpg", ".png", ".gif", ".webp"].includes(detected.extension)) {
+        results.push({ fileName: file.name, matched: false, error: "Недопустимый или неподтверждённый формат" });
+        unmatchedCount++;
+        continue;
+      }
+      const safeFileName = `${Date.now()}-${randomBytes(8).toString("hex")}${detected.extension}`;
       await writeFile(path.join(uploadDir, safeFileName), buffer);
       const imageUrl = `/api/uploads/products/${safeFileName}`;
 

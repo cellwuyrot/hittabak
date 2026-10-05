@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import type { Metadata } from "next";
+import { publicBusinessConfig } from "@/lib/publicConfig";
 
 export const metadata: Metadata = {
   title: "Политика обработки персональных данных — hittabak",
@@ -9,6 +10,8 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPage() {
+  const { legalEntityName } = publicBusinessConfig();
+  if (!legalEntityName) return <><Header /><main className="p-8"><p>Сведения об операторе персональных данных временно недоступны. Владелец сайта уведомлён о необходимости настройки.</p></main><Footer /></>;
   return (
     <>
       <Header />
@@ -20,7 +23,7 @@ export default function PrivacyPage() {
             <section>
               <h2 className="text-base font-bold text-text-dark mb-2">1. Общие положения</h2>
               <p>1.1. Настоящая Политика оператора в отношении обработки персональных данных (далее — Политика) разработана в соответствии с требованиями Федерального закона от 27.07.2006 № 152-ФЗ «О персональных данных».</p>
-              <p className="mt-2">1.2. Оператор: Компания hittabak (далее — Оператор).</p>
+              <p className="mt-2">1.2. Оператор: {legalEntityName} (далее — Оператор).</p>
               <p className="mt-2">1.3. Сайт Оператора: hittabak.ru (далее — Сайт).</p>
               <p className="mt-2">1.4. Настоящая Политика определяет порядок обработки персональных данных и меры по обеспечению безопасности персональных данных Пользователей Сайта.</p>
             </section>

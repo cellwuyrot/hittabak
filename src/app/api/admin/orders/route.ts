@@ -1,15 +1,10 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 
-function checkAdmin(request: Request): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  const payload = verifyToken(token);
-  return !!payload && payload.role === "admin";
-}
 
 export async function GET(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "personal:read");
+  if (!auth.ok) return adminDenied(auth);
   const orders = await prisma.order.findMany({
     include: { user: { select: { email: true, name: true } }, items: { include: { product: true } } },
     orderBy: { createdAt: "desc" },
@@ -18,7 +13,8 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "personal:write");
+  if (!auth.ok) return adminDenied(auth);
   const { id, status, adminNote } = await request.json();
   if (!id) return Response.json({ error: "Укажите id" }, { status: 400 });
   if (status === undefined && adminNote === undefined) {
@@ -44,7 +40,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "personal:delete");
+  if (!auth.ok) return adminDenied(auth);
   const { id } = await request.json();
   if (!id) return Response.json({ error: "Укажите id" }, { status: 400 });
   const order = await prisma.order.findUnique({ where: { id } });

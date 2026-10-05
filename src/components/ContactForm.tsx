@@ -37,37 +37,53 @@ export default function ContactForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <label htmlFor="contact-name" className="block text-sm font-medium">Ваше имя</label>
       <input
+        id="contact-name"
         type="text"
+        maxLength={100}
         placeholder="Ваше имя"
         required
         value={form.name}
         onChange={(e) => setForm({ ...form, name: e.target.value })}
         className="w-full px-4 py-3 border border-border rounded-xl text-sm focus:border-accent focus:outline-none"
       />
+      <label htmlFor="contact-email" className="block text-sm font-medium">Email</label>
       <input
+        id="contact-email"
         type="email"
+        maxLength={254}
         placeholder="Email"
         required
         value={form.email}
         onChange={(e) => setForm({ ...form, email: e.target.value })}
         className="w-full px-4 py-3 border border-border rounded-xl text-sm focus:border-accent focus:outline-none"
       />
+      <label htmlFor="contact-phone" className="block text-sm font-medium">Телефон (необязательно)</label>
       <input
+        id="contact-phone"
         type="tel"
+        maxLength={32}
         placeholder="Телефон"
         value={form.phone}
         onChange={(e) => setForm({ ...form, phone: e.target.value })}
         className="w-full px-4 py-3 border border-border rounded-xl text-sm focus:border-accent focus:outline-none"
       />
+      <label htmlFor="contact-subject" className="block text-sm font-medium">Тема (необязательно)</label>
       <input
+        id="contact-subject"
         type="text"
+        maxLength={150}
         placeholder="Тема обращения"
         value={form.subject}
         onChange={(e) => setForm({ ...form, subject: e.target.value })}
         className="w-full px-4 py-3 border border-border rounded-xl text-sm focus:border-accent focus:outline-none"
       />
+      <label htmlFor="contact-message" className="block text-sm font-medium">Сообщение</label>
       <textarea
+        id="contact-message"
+        maxLength={4000}
+        aria-describedby="contact-status"
         placeholder="Сообщение"
         required
         rows={4}
@@ -75,7 +91,7 @@ export default function ContactForm() {
         onChange={(e) => setForm({ ...form, message: e.target.value })}
         className="w-full px-4 py-3 border border-border rounded-xl text-sm focus:border-accent focus:outline-none resize-none"
       />
-      {status === "error" && <p className="text-danger text-xs">Ошибка отправки. Попробуйте ещё раз.</p>}
+      <p id="contact-status" aria-live="polite" className="text-danger text-xs">{status === "error" ? "Проверьте данные или попробуйте позже." : ""}</p>
       <button
         type="submit"
         disabled={status === "sending"}

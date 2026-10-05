@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
+import { authenticateUser } from "@/lib/userAuthorization";
 import bcrypt from "bcryptjs";
 
 export async function GET(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) return Response.json({ error: "Не авторизован" }, { status: 401 });
-  const payload = verifyToken(token);
-  if (!payload || payload.role !== "user") return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const authentication = await authenticateUser(request);
+  if (!authentication) return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const payload = authentication.claims;
 
   const user = await prisma.user.findUnique({
     where: { id: payload.id },
@@ -17,10 +16,9 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) return Response.json({ error: "Не авторизован" }, { status: 401 });
-  const payload = verifyToken(token);
-  if (!payload || payload.role !== "user") return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const authentication = await authenticateUser(request);
+  if (!authentication) return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const payload = authentication.claims;
 
   const body = await request.json();
   const { name, lastName, phone, address, email, currentPassword, newPassword, zipCode, region, city, street, building, apartment } = body;

@@ -1,14 +1,8 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 import { slugify } from "@/lib/slugify";
 import * as XLSX from "xlsx";
 
-function checkAdmin(request: Request): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  const payload = verifyToken(token);
-  return !!payload && payload.role === "admin";
-}
 
 // Expected XLSX columns — supports both initial import and re-import from export
 const KNOWN_COLUMNS: Record<string, string[]> = {
@@ -78,7 +72,8 @@ export const maxDuration = 60;
 
 // PUT — parse XLSX and return structured data
 export async function PUT(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "data:import");
+  if (!auth.ok) return adminDenied(auth);
 
   let formData;
   try {
@@ -195,7 +190,8 @@ interface ImportProduct {
 
 // POST — import products with new structure (Раздел, Название, Цвет, Цена, Файл изображения)
 export async function POST(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "data:import");
+  if (!auth.ok) return adminDenied(auth);
 
   const body = await request.json();
   const products: ImportProduct[] = body.products;

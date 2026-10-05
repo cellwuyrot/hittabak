@@ -2758,7 +2758,6 @@ const SOURCE_COLORS: Record<string, string> = {
 function ReviewsPanel({ token }: { token: string }) {
   const [products, setProducts] = useState<ReviewProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const [geminiOn, setGeminiOn] = useState<boolean | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "missing" | "has">("all");
   const [page, setPage] = useState(1);
@@ -2766,14 +2765,8 @@ function ReviewsPanel({ token }: { token: string }) {
 
   const [formProductId, setFormProductId] = useState<string | null>(null);
   const [form, setForm] = useState({ authorName: "", rating: 5, text: "", date: "" });
-  const [genLoading, setGenLoading] = useState(false);
   const [savingForm, setSavingForm] = useState(false);
-  const [quickGenId, setQuickGenId] = useState<string | null>(null);
 
-  const [bulkOnlyMissing, setBulkOnlyMissing] = useState(true);
-  const [bulkPer, setBulkPer] = useState(1);
-  const [bulkLoading, setBulkLoading] = useState(false);
-  const [bulkMsg, setBulkMsg] = useState("");
 
   const [impStep, setImpStep] = useState<"idle" | "mapping">("idle");
   const [impHeaders, setImpHeaders] = useState<string[]>([]);
@@ -2794,33 +2787,12 @@ function ReviewsPanel({ token }: { token: string }) {
 
   useEffect(() => {
     load();
-    fetch("/api/admin/reviews/generate", { headers: authHdr })
-      .then((r) => (r.ok ? r.json() : { gemini: false }))
-      .then((d) => setGeminiOn(Boolean(d.gemini)))
-      .catch(() => setGeminiOn(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openForm = (p: ReviewProduct) => {
     setFormProductId(formProductId === p.id ? null : p.id);
     setForm({ authorName: "", rating: 5, text: "", date: "" });
-  };
-
-  const generateDraft = async (p: ReviewProduct) => {
-    setGenLoading(true);
-    try {
-      const res = await fetch("/api/admin/reviews/generate", {
-        method: "POST",
-        headers: jsonHdr,
-        body: JSON.stringify({ productId: p.id, rating: form.rating || undefined, authorName: form.authorName || undefined }),
-      });
-      if (res.ok) {
-        const d = await res.json();
-        setForm((f) => ({ ...f, authorName: d.authorName, rating: d.rating, text: d.text }));
-      }
-    } finally {
-      setGenLoading(false);
-    }
   };
 
   const applyForm = async (productId: string) => {
@@ -2841,28 +2813,6 @@ function ReviewsPanel({ token }: { token: string }) {
     }
   };
 
-  const quickGenerate = async (p: ReviewProduct) => {
-    setQuickGenId(p.id);
-    try {
-      const gen = await fetch("/api/admin/reviews/generate", {
-        method: "POST",
-        headers: jsonHdr,
-        body: JSON.stringify({ productId: p.id }),
-      });
-      if (gen.ok) {
-        const d = await gen.json();
-        await fetch("/api/admin/reviews", {
-          method: "POST",
-          headers: jsonHdr,
-          body: JSON.stringify({ productId: p.id, authorName: d.authorName, rating: d.rating, text: d.text, source: "ai" }),
-        });
-        await load();
-      }
-    } finally {
-      setQuickGenId(null);
-    }
-  };
-
   const togglePublished = async (r: AdminReview) => {
     await fetch("/api/admin/reviews", { method: "PATCH", headers: jsonHdr, body: JSON.stringify({ id: r.id, published: !r.published }) });
     await load();
@@ -2877,31 +2827,6 @@ function ReviewsPanel({ token }: { token: string }) {
   const openGoogle = (p: ReviewProduct) => {
     const q = `Напиши правдоподобный отзыв покупателя на товар "${p.name}" для интернет-магазина, 2-3 предложения, от первого лица`;
     window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}`, "_blank");
-  };
-
-  const runBulk = async () => {
-    const scope = bulkOnlyMissing ? "товаров без отзывов" : "ВСЕХ товаров";
-    if (!confirm(`Сгенерировать и применить отзывы для ${scope}? Будет создано по ${bulkPer} отзыв(а) на товар.`)) return;
-    setBulkLoading(true);
-    setBulkMsg("");
-    try {
-      const res = await fetch("/api/admin/reviews/generate", {
-        method: "POST",
-        headers: jsonHdr,
-        body: JSON.stringify({ bulk: true, onlyMissing: bulkOnlyMissing, perProduct: bulkPer }),
-      });
-      const d = await res.json();
-      if (res.ok) {
-        setBulkMsg(`Готово: создано ${d.created} отзывов для ${d.productsProcessed} товаров${d.engine === "gemini" ? " (нейросеть Google)" : " (локальный генератор)"}.`);
-        await load();
-      } else {
-        setBulkMsg(`Ошибка: ${d.error || "не удалось"}`);
-      }
-    } catch {
-      setBulkMsg("Ошибка сети");
-    } finally {
-      setBulkLoading(false);
-    }
   };
 
   const REVIEW_FIELDS = [
@@ -3017,35 +2942,6 @@ function ReviewsPanel({ token }: { token: string }) {
               Всего товаров: {products.length} · отзывов: {totalReviews} · без отзывов: {missingCount}
             </p>
           </div>
-          {geminiOn !== null && (
-            <span className={`text-xs px-3 py-1.5 rounded-full font-medium ${geminiOn ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
-              {geminiOn ? "✨ Нейросеть Google подключена" : "Локальный генератор (без ключа Google)"}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Массовая генерация */}
-      <div className="bg-bg-white rounded-xl border border-border p-5">
-        <h3 className="font-bold text-text-dark mb-2">Сгенерировать отзывы для товаров</h3>
-        <p className="text-sm text-text-gray mb-3">
-          Нейросеть создаст отзыв от имени случайного покупателя (например, «Василий А.») для каждого товара и сразу применит его.
-        </p>
-        <div className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-2 text-sm text-text-dark cursor-pointer">
-            <input type="checkbox" checked={bulkOnlyMissing} onChange={(e) => setBulkOnlyMissing(e.target.checked)} className="accent-primary w-4 h-4" />
-            Только товары без отзывов
-          </label>
-          <label className="flex items-center gap-2 text-sm text-text-dark">
-            Отзывов на товар:
-            <input type="number" min={1} max={5} value={bulkPer} onChange={(e) => setBulkPer(Math.min(5, Math.max(1, Number(e.target.value) || 1)))}
-              className="w-16 border border-border rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-primary" />
-          </label>
-          <button onClick={runBulk} disabled={bulkLoading}
-            className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 text-white text-sm px-5 py-2 rounded-lg transition-all">
-            {bulkLoading ? "Генерация…" : "Сгенерировать и применить"}
-          </button>
-          {bulkMsg && <span className="text-sm text-text-dark">{bulkMsg}</span>}
         </div>
       </div>
 
@@ -3153,11 +3049,6 @@ function ReviewsPanel({ token }: { token: string }) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => quickGenerate(p)} disabled={quickGenId === p.id} title="Сгенерировать отзыв нейросетью и сразу применить"
-                      className="inline-flex items-center gap-1.5 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 text-white text-sm px-3 py-1.5 rounded-lg transition-all">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
-                      {quickGenId === p.id ? "…" : "Сгенерировать"}
-                    </button>
                     <button onClick={() => openForm(p)} className="text-sm px-3 py-1.5 rounded-lg border border-border text-text-gray hover:bg-bg-light transition-colors">
                       {isFormOpen ? "Скрыть" : "Добавить"}
                     </button>
@@ -3186,11 +3077,6 @@ function ReviewsPanel({ token }: { token: string }) {
                       </button>
                     </div>
                     <div className="md:col-span-2 flex items-center gap-2 flex-wrap">
-                      <button type="button" onClick={() => generateDraft(p)} disabled={genLoading}
-                        className="inline-flex items-center gap-1.5 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-all">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /></svg>
-                        {genLoading ? "Генерация…" : "Сгенерировать черновик"}
-                      </button>
                       <button type="button" onClick={() => applyForm(p.id)} disabled={savingForm || !form.text.trim()}
                         className="bg-primary hover:bg-primary-dark disabled:opacity-50 text-white text-sm px-5 py-2 rounded-lg transition-colors">
                         {savingForm ? "Сохранение…" : "Применить"}

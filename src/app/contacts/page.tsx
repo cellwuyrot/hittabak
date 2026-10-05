@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import type { Metadata } from "next";
 import ContactForm from "@/components/ContactForm";
+import { publicBusinessConfig } from "@/lib/publicConfig";
 
 export const metadata: Metadata = {
   title: "Контакты — hittabak",
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 export default function ContactsPage() {
+  const { supportEmail, supportPhone } = publicBusinessConfig();
   return (
     <>
       <Header />
@@ -27,20 +29,8 @@ export default function ContactsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
               <div className="space-y-6">
-                <div className="bg-white rounded-xl border border-border p-5">
-                  <h3 className="text-sm font-bold text-text-dark mb-2">Телефон горячей линии</h3>
-                  <a href="tel:+79362568950" className="text-lg font-bold text-accent hover:text-accent-dark transition-colors">
-                    +7 (936) 256-89-50
-                  </a>
-                  <p className="text-xs text-text-gray mt-1">ПН-ВС 09:00-21:00</p>
-                </div>
-
-                <div className="bg-white rounded-xl border border-border p-5">
-                  <h3 className="text-sm font-bold text-text-dark mb-2">Email</h3>
-                  <a href="mailto:support@hittabak.ru" className="text-accent hover:text-accent-dark transition-colors">
-                    support@hittabak.ru
-                  </a>
-                </div>
+                {supportPhone && <div className="bg-white rounded-xl border border-border p-5"><h3 className="text-sm font-bold text-text-dark mb-2">Телефон</h3><p>{supportPhone}</p></div>}
+                {supportEmail && <div className="bg-white rounded-xl border border-border p-5"><h3 className="text-sm font-bold text-text-dark mb-2">Email</h3><p>{supportEmail}</p></div>}
 
                 <div className="bg-white rounded-xl border border-border p-5">
                   <h3 className="text-sm font-bold text-text-dark mb-2">Мессенджеры</h3>
