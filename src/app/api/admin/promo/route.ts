@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await authorizeAdmin(request, "settings:manage"); if (!auth.ok) return adminDenied(auth);
   const promos = await prisma.promoCode.findMany({ orderBy: { createdAt: "desc" } });
   return NextResponse.json(promos);
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await authorizeAdmin(req, "settings:manage"); if (!auth.ok) return adminDenied(auth);
   const data = await req.json();
   
   if (data.id) {
@@ -41,6 +44,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const auth = await authorizeAdmin(req, "settings:manage"); if (!auth.ok) return adminDenied(auth);
   const { id } = await req.json();
   await prisma.promoCode.delete({ where: { id } });
   return NextResponse.json({ success: true });

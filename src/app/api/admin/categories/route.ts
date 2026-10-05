@@ -1,13 +1,7 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 import { slugify } from "@/lib/slugify";
 
-function checkAdmin(request: Request): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  const payload = verifyToken(token);
-  return !!payload && payload.role === "admin";
-}
 
 async function uniqueSlug(name: string) {
   const base = slugify(name) || "category";
@@ -38,7 +32,8 @@ async function validateParent(parentId: string | null, editingId?: string) {
 }
 
 export async function GET(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:read");
+  if (!auth.ok) return adminDenied(auth);
   const categories = await prisma.category.findMany({
     orderBy: [{ order: "asc" }, { name: "asc" }],
     include: { _count: { select: { products: true, children: true } } },
@@ -47,7 +42,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:write");
+  if (!auth.ok) return adminDenied(auth);
   try {
     const { name, icon, order, parentId, metaTitle, metaDescription, seoText } = await request.json();
     if (!name?.trim()) return Response.json({ error: "Название обязательно" }, { status: 400 });
@@ -65,7 +61,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:write");
+  if (!auth.ok) return adminDenied(auth);
   try {
     const { id, name, icon, order, parentId, metaTitle, metaDescription, seoText } = await request.json();
     if (!id || !name?.trim()) return Response.json({ error: "ID и название обязательны" }, { status: 400 });
@@ -84,7 +81,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:delete");
+  if (!auth.ok) return adminDenied(auth);
   const { id } = await request.json();
   if (!id) return Response.json({ error: "ID обязателен" }, { status: 400 });
   const category = await prisma.category.findUnique({

@@ -1,20 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-
-export async function POST(req: NextRequest) {
-  try {
-    const { name, email, phone, subject, message } = await req.json();
-
-    if (!name || !email || !message) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
-
-    await prisma.contactMessage.create({
-      data: { name, email, phone: phone || "", subject: subject || "", message },
-    });
-
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
-  }
-}
+import { NextRequest, NextResponse } from "next/server"; import { prisma } from "@/lib/prisma"; import { clientIp, takeRateLimit } from "@/lib/rateLimit";
+const MAX_BODY=16*1024; const emailRe=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function field(body:Record<string,unknown>,name:string,max:number,required=false){const v=body[name];if(v===undefined&&!required)return "";if(typeof v!=="string")throw new Error(name);const out=v.trim();if((required&&!out)||out.length>max)throw new Error(name);return out;}
+export async function POST(req:NextRequest){const len=Number(req.headers.get("content-length")||0);if(len>MAX_BODY)return NextResponse.json({error:"Запрос слишком большой"},{status:413});if(!takeRateLimit(`contact:${clientIp(req)}`,5,15*60_000))return NextResponse.json({error:"Слишком много запросов. Попробуйте позже."},{status:429});const retentionDays=Number(process.env.CONTACT_RETENTION_DAYS);if(!Number.isInteger(retentionDays)||retentionDays<1||retentionDays>3650){console.error("Owner configuration error: CONTACT_RETENTION_DAYS is required");return NextResponse.json({error:"Форма временно недоступна"},{status:503});}let body:Record<string,unknown>;try{const text=await req.text();if(Buffer.byteLength(text)>MAX_BODY)return NextResponse.json({error:"Запрос слишком большой"},{status:413});body=JSON.parse(text);}catch{return NextResponse.json({error:"Некорректные данные"},{status:400});}try{const name=field(body,"name",100,true),email=field(body,"email",254,true).toLowerCase(),phone=field(body,"phone",32),subject=field(body,"subject",150),message=field(body,"message",4000,true);if(!emailRe.test(email))throw new Error("email");await prisma.contactMessage.create({data:{name,email,phone,subject,message,retentionUntil:new Date(Date.now()+retentionDays*86400_000)}});return NextResponse.json({ok:true});}catch(error){if(error instanceof Error&&["name","email","phone","subject","message"].includes(error.message))return NextResponse.json({error:"Проверьте заполнение полей"},{status:400});console.error("Contact request failed");return NextResponse.json({error:"Не удалось сохранить обращение"},{status:500});}}

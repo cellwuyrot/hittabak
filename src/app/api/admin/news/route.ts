@@ -1,22 +1,18 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 import { slugify } from "@/lib/slugify";
 
-function checkAdmin(request: Request): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  const payload = verifyToken(token);
-  return !!payload && payload.role === "admin";
-}
 
 export async function GET(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:read");
+  if (!auth.ok) return adminDenied(auth);
   const news = await prisma.news.findMany({ orderBy: { createdAt: "desc" } });
   return Response.json(news);
 }
 
 export async function POST(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:write");
+  if (!auth.ok) return adminDenied(auth);
   const { title, excerpt, content, image, published, type } = await request.json();
   if (!title) return Response.json({ error: "Укажите заголовок" }, { status: 400 });
 
@@ -36,7 +32,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:write");
+  if (!auth.ok) return adminDenied(auth);
   const { id, title, excerpt, content, image, published, type } = await request.json();
   if (!id) return Response.json({ error: "Укажите id" }, { status: 400 });
 
@@ -48,7 +45,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:delete");
+  if (!auth.ok) return adminDenied(auth);
   const { id } = await request.json();
   await prisma.news.delete({ where: { id } });
   return Response.json({ ok: true });

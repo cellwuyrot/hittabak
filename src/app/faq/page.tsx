@@ -56,7 +56,7 @@ export default async function FaqPage() {
             </>
           ) : (
             <div className="text-center py-20">
-              <p className="text-text-gray text-lg">FAQ скоро появится</p>
+              <p className="text-text-gray text-lg">Ответы на вопросы пока не опубликованы.</p>
             </div>
           )}
         </div>

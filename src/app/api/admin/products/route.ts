@@ -1,17 +1,12 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 import { slugify } from "@/lib/slugify";
 import { classificationFromPath, getCategoryPathNodes, loadAllCategories } from "@/lib/catalogCategories";
 
-function checkAdmin(request: Request): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  const payload = verifyToken(token);
-  return !!payload && payload.role === "admin";
-}
 
 export async function GET(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:read");
+  if (!auth.ok) return adminDenied(auth);
 
   const products = await prisma.product.findMany({
     orderBy: { createdAt: "desc" },
@@ -21,7 +16,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:write");
+  if (!auth.ok) return adminDenied(auth);
 
   const body = await request.json();
   const { name, description, price, oldPrice, image, inStock, packSize, brand, color, productType, categoryId, isFeatured, tags, metaTitle, metaDescription } = body;
@@ -55,7 +51,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:write");
+  if (!auth.ok) return adminDenied(auth);
 
   const body = await request.json();
 
@@ -100,7 +97,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "content:delete");
+  if (!auth.ok) return adminDenied(auth);
 
   const body = await request.json();
   const { id, ids } = body as { id?: string; ids?: string[] };

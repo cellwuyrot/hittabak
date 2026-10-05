@@ -1,24 +1,14 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
-import jwt from "jsonwebtoken";
 import { sendStatusUpdateNotification } from "@/lib/mail";
 import { getSiteSettings } from "@/lib/siteSettings";
 
-const SECRET = process.env.JWT_SECRET || "hittabak-secret-key-2025";
 
-function checkAdmin(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!auth) return false;
-  try {
-    const payload = jwt.verify(auth.replace("Bearer ", ""), SECRET) as { role?: string };
-    return payload.role === "admin";
-  } catch {
-    return false;
-  }
-}
 
 export async function GET(req: NextRequest) {
-  if (!checkAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authorizeAdmin(req, "personal:read");
+  if (!auth.ok) return adminDenied(auth);
 
   const inquiries = await prisma.inquiry.findMany({
     orderBy: { createdAt: "desc" },
@@ -27,7 +17,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!checkAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authorizeAdmin(req, "personal:write");
+  if (!auth.ok) return adminDenied(auth);
 
   const { id, status, adminNote } = await req.json();
   if (!id) return Response.json({ error: "Укажите id" }, { status: 400 });
@@ -67,7 +58,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!checkAdmin(req)) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await authorizeAdmin(req, "personal:delete");
+  if (!auth.ok) return adminDenied(auth);
 
   const { id } = await req.json();
   await prisma.inquiry.delete({ where: { id } });

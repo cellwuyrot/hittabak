@@ -1,13 +1,7 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 import * as XLSX from "xlsx";
 
-function checkAdmin(request: Request): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  const payload = verifyToken(token);
-  return !!payload && payload.role === "admin";
-}
 
 // Распознаваемые колонки таблицы отзывов
 const KNOWN_COLUMNS: Record<string, string[]> = {
@@ -59,7 +53,8 @@ export const maxDuration = 60;
 
 // GET — скачать шаблон таблицы отзывов
 export async function GET(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "data:import");
+  if (!auth.ok) return adminDenied(auth);
 
   const headers = ["Товар", "Автор", "Оценка", "Текст отзыва", "Дата", "Опубликован"];
   const example = [
@@ -82,7 +77,8 @@ export async function GET(request: Request) {
 
 // PUT — распарсить загруженный файл и вернуть строки + автоопределение колонок
 export async function PUT(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "data:import");
+  if (!auth.ok) return adminDenied(auth);
 
   let formData;
   try {
@@ -172,23 +168,17 @@ interface ImportReview {
   published?: string;
 }
 
-function parsePublished(v: unknown): boolean {
-  if (v === undefined || v === null || v === "") return true;
-  const s = String(v).toLowerCase().trim();
-  return !["нет", "no", "false", "0", "скрыт", "скрытый", "off"].includes(s);
-}
-
 function norm(s: string): string {
   return s.toLowerCase().trim();
 }
 
 // POST — импорт отзывов с привязкой к существующим товарам
 export async function POST(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "data:import");
+  if (!auth.ok) return adminDenied(auth);
 
   const body = await request.json();
   const reviews: ImportReview[] = body.reviews;
-  const publish = body.publish === undefined ? true : Boolean(body.publish);
   if (!reviews || reviews.length === 0) {
     return Response.json({ error: "Нет отзывов для импорта" }, { status: 400 });
   }
@@ -246,8 +236,8 @@ export async function POST(request: Request) {
         authorName: (r.author || "").toString().trim(),
         rating,
         text: (r.text || "").toString().trim(),
-        published: r.published !== undefined ? parsePublished(r.published) : publish,
-        source: "import",
+        published: false,
+        source: "import-unverified",
         ...(createdAt ? { createdAt } : {}),
       },
     });

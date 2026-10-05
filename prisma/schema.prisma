@@ -94,8 +94,8 @@ model User {
   street       String        @default("")
   building     String        @default("")
   apartment    String        @default("")
-  resetToken   String?
-  resetExpires DateTime?
+  sessionVersion Int @default(0)
+  passwordResetTokens PasswordResetToken[]
   cart         CartItem[]
   orders       Order[]
   reviews      Review[]
@@ -282,11 +282,34 @@ model CallbackRequest {
 }
 
 model EmailVerification {
-  id        String   @id @default(uuid())
-  email     String
-  code      String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id          String    @id @default(uuid())
+  email       String
+  purpose     String    @default("registration")
+  // Kept only for the pre-existing checkout verification flow.
+  code        String?
+  codeHash    String?
+  proofHash   String?   @unique
+  expiresAt   DateTime
+  verifiedAt  DateTime?
+  consumedAt  DateTime?
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([email, purpose, createdAt])
+}
+
+model PasswordResetToken {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  purpose     String    @default("password-reset")
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, purpose, createdAt])
 }
 
 model BlogPost {
@@ -334,6 +357,7 @@ model ContactMessage {
   message   String
   status    String   @default("new")
   createdAt DateTime @default(now())
+  retentionUntil DateTime?
 }
 
 model Referral {

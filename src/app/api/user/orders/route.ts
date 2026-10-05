@@ -1,16 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
+import { authenticateUser } from "@/lib/userAuthorization";
 
-function getUserId(request: Request): string | null {
-  const token = getTokenFromRequest(request);
-  if (!token) return null;
-  const payload = verifyToken(token);
-  if (!payload || payload.role !== "user") return null;
-  return payload.id;
-}
+async function getUserId(request: Request): Promise<string | null> { const auth = await authenticateUser(request); return auth?.user.id ?? null; }
 
 export async function GET(request: Request) {
-  const userId = getUserId(request);
+  const userId = await getUserId(request);
   if (!userId) return Response.json({ error: "Не авторизован" }, { status: 401 });
 
   const orders = await prisma.order.findMany({
@@ -27,7 +21,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const userId = getUserId(request);
+  const userId = await getUserId(request);
   if (!userId) return Response.json({ error: "Не авторизован" }, { status: 401 });
 
   const { name, phone, address, comment } = await request.json();

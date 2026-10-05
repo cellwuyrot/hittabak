@@ -1,11 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
+import { authenticateUser } from "@/lib/userAuthorization";
 
 export async function GET(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) return Response.json({ error: "Не авторизован" }, { status: 401 });
-  const payload = verifyToken(token);
-  if (!payload || payload.role !== "user") return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const authentication = await authenticateUser(request);
+  if (!authentication) return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const payload = authentication.claims;
 
   const url = new URL(request.url);
   const orderId = url.searchParams.get("orderId");
@@ -22,10 +21,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) return Response.json({ error: "Не авторизован" }, { status: 401 });
-  const payload = verifyToken(token);
-  if (!payload || payload.role !== "user") return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const authentication = await authenticateUser(request);
+  if (!authentication) return Response.json({ error: "Не авторизован" }, { status: 401 });
+  const payload = authentication.claims;
 
   const { orderId, text } = await request.json();
   if (!orderId || !text) return Response.json({ error: "orderId и text обязательны" }, { status: 400 });

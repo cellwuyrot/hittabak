@@ -1,12 +1,6 @@
+import { authorizeAdmin, adminDenied } from "@/lib/adminAuthorization";
 import { prisma } from "@/lib/prisma";
-import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 
-function checkAdmin(request: Request): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  const payload = verifyToken(token);
-  return !!payload && payload.role === "admin";
-}
 
 function displayName(r: {
   authorName: string;
@@ -19,7 +13,8 @@ function displayName(r: {
 
 // GET — список всех товаров с их отзывами (для раздела «Отзывы» в админке)
 export async function GET(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "reviews:read");
+  if (!auth.ok) return adminDenied(auth);
 
   const products = await prisma.product.findMany({
     orderBy: { createdAt: "desc" },
@@ -59,10 +54,11 @@ export async function GET(request: Request) {
 
 // POST — создать (применить) отзыв вручную/из сгенерированного черновика
 export async function POST(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "reviews:moderate");
+  if (!auth.ok) return adminDenied(auth);
 
   const body = await request.json();
-  const { productId, authorName, rating, text, published, source, createdAt } = body;
+  const { productId, authorName, rating, text, published, createdAt } = body;
 
   if (!productId) return Response.json({ error: "Не указан товар" }, { status: 400 });
   const numRating = Number(rating) || 5;
@@ -77,8 +73,8 @@ export async function POST(request: Request) {
       authorName: (authorName || "").toString().trim(),
       rating: numRating,
       text: (text || "").toString().trim(),
-      published: published === undefined ? true : Boolean(published),
-      source: source || "manual",
+      published: published === undefined ? false : Boolean(published),
+      source: "manual",
       ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
     },
   });
@@ -88,11 +84,16 @@ export async function POST(request: Request) {
 
 // PATCH — обновить существующий отзыв
 export async function PATCH(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "reviews:moderate");
+  if (!auth.ok) return adminDenied(auth);
 
   const body = await request.json();
   const { id, authorName, rating, text, published } = body;
   if (!id) return Response.json({ error: "Не указан отзыв" }, { status: 400 });
+
+  const existing = await prisma.review.findUnique({ where: { id }, select: { source: true } });
+  if (!existing) return Response.json({ error: "Отзыв не найден" }, { status: 404 });
+  if (published === true && ["ai", "import-unverified"].includes(existing.source)) return Response.json({ error: "Нельзя публиковать отзыв без подтверждённого происхождения" }, { status: 400 });
 
   const data: Record<string, unknown> = {};
   if (authorName !== undefined) data.authorName = String(authorName).trim();
@@ -110,7 +111,8 @@ export async function PATCH(request: Request) {
 
 // DELETE — удалить один отзыв { id } или несколько { ids: [] }
 export async function DELETE(request: Request) {
-  if (!checkAdmin(request)) return Response.json({ error: "Нет доступа" }, { status: 401 });
+  const auth = await authorizeAdmin(request, "reviews:moderate");
+  if (!auth.ok) return adminDenied(auth);
 
   const body = await request.json().catch(() => ({}));
   const { id, ids } = body as { id?: string; ids?: string[] };
